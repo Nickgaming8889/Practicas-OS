@@ -49,10 +49,15 @@ void Simulador::ejecutar() {
             for (int t = 0; t < proceso.tiempo_max; ++t) {
                 proceso.tiempo_transcurrido++;
                 reloj_global++;
-                cout << "Lotes pendientes: " << lotes.size() << 
-                        "\nLote en ejecucion: " << num_lote << 
-                        "\nProceso en ejecucion: " << proceso.id_programa + 1 << 
-                        "\nProgramador: " << proceso.programador << " Operacion: " << proceso.operacion << 
+                cout << "Lotes pendientes: " << lotes.size() <<
+                        "\nLote en ejecucion: " << num_lote << endl;
+                        for (const auto& proceso : lote_actual.procesos) {
+                            cout << "ID: " << proceso.id_programa << "Tiempo Estimado: " << proceso.tiempo_max << endl;
+                        }
+                cout << "\nProceso en ejecucion: " <<
+                        "\nID Programa: " << proceso.id_programa + 1 << 
+                        "\nProgramador: " << proceso.programador << 
+                        "\nOperacion: " << proceso.datos[0] << proceso.operacion << proceso.datos[1] <<
                         "\nTiempo transcurrido: " << proceso.tiempo_transcurrido << 
                         "\nTiempo restante: " << proceso.tiempo_max - proceso.tiempo_transcurrido << 
                         "\nTiempo Global: " << reloj_global << endl;
@@ -61,7 +66,10 @@ void Simulador::ejecutar() {
             
             proceso.ejecutar();
             procesos_terminados.push_back({proceso.id_programa, proceso.resultado});
-            cout << "Proceso terminado: " << proceso.id_programa + 1 << ", Resultado: " << proceso.resultado << endl;
+            cout << "\nProceso terminado: " << 
+                    "\nID Programa: " << proceso.id_programa + 1 <<
+
+                    "\nResultado: " << proceso.resultado << endl;
         }
         num_lote++;
     }
