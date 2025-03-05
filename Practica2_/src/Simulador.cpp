@@ -27,9 +27,9 @@ void Simulador::agregar_proceso_manual() {
         procesos.emplace_back(id, programador, operacion, datos, tiempo_max);
     }
     
-    for (size_t i = 0; i < procesos.size(); i += 4) {
+    for (size_t i = 0; i < procesos.size(); i += 3) {
         Lote lote;
-        for (size_t j = i; j < i + 4 && j < procesos.size(); ++j) {
+        for (size_t j = i; j < i + 3 && j < procesos.size(); ++j) {
             lote.procesos.push_back(procesos[j]);
         }
         lotes.push(lote);
@@ -49,7 +49,7 @@ void Simulador::ejecutar() {
             for (int t = 0; t < proceso.tiempo_max; ++t) {
                 proceso.tiempo_transcurrido++;
                 reloj_global++;
-                cout << "\nLotes pendientes: " << lotes.size() <<
+                cout << "Lotes pendientes: " << lotes.size() <<
                         "\nLote en ejecucion: " << num_lote << endl;
                         for (const auto& proceso : lote_actual.procesos) {
                             cout << "ID: " << proceso.id_programa + 1 << ". Tiempo Estimado: " << proceso.tiempo_max << endl;
@@ -62,19 +62,14 @@ void Simulador::ejecutar() {
                         "\nTiempo restante: " << proceso.tiempo_max - proceso.tiempo_transcurrido << 
                         "\nTiempo Global: " << reloj_global << endl;
                 this_thread::sleep_for(chrono::seconds(1));
-                if (!procesos_terminados.empty()) {
-                    cout << "\nProcesos Terminados." << endl;
-                    for (const auto& p : procesos_terminados) {
-                        cout << "ID Programa: " << p.first + 1 << " Resultado: " << p.second << endl;
-                    }
-                }
             }
+            
             proceso.ejecutar();
             procesos_terminados.push_back({proceso.id_programa, proceso.resultado});
-            /*cout << "\nProceso terminado: " << 
+            cout << "\nProceso terminado: " << 
                     "\nID Programa: " << proceso.id_programa + 1 <<
 
-                    "\nResultado: " << proceso.resultado << endl;*/
+                    "\nResultado: " << proceso.resultado << endl;
         }
         num_lote++;
     }
