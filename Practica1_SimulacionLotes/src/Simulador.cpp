@@ -7,13 +7,13 @@ void Simulador::agregar_proceso_manual() {
     cout << "Ingrese el número de procesos: ";
     cin >> n;
     
-    for (int i = 0; i < n; ++i) {
+    for (int i = 1; i <= n; ++i) {
         int id, tiempo_max;
         string programador;
         char operacion;
         vector<int> datos(2);
         
-        cout << "Favor de ingresar los datos del proceso No. " << i + 1 << endl;
+        cout << "Favor de ingresar los datos del proceso No. " << i << endl;
         id = i;
         cout << "Ingrese nombre del programador: ";
         cin >> programador;
@@ -44,7 +44,7 @@ void Simulador::ejecutar() {
         cout << "Lotes pendientes: " << lotes.size() << endl;
 
         for (auto& proceso : lote_actual.procesos) {
-            cout << "\nEjecutando proceso " << proceso.id_programa + 1 << ": " << proceso.programador << ", " << proceso.operacion << " " << proceso.datos[0] << " " << proceso.datos[1] << endl;
+            cout << "\nEjecutando proceso " << proceso.id_programa << ": " << proceso.programador << ", " << proceso.operacion << " " << proceso.datos[0] << " " << proceso.datos[1] << endl;
             
             for (int t = 0; t < proceso.tiempo_max; ++t) {
                 proceso.tiempo_transcurrido++;
@@ -52,25 +52,31 @@ void Simulador::ejecutar() {
                 cout << "\nLotes pendientes: " << lotes.size() <<
                         "\nLote en ejecucion: " << num_lote << endl;
                         for (const auto& proceso : lote_actual.procesos) {
-                            cout << "ID: " << proceso.id_programa + 1 << ". Tiempo Estimado: " << proceso.tiempo_max << endl;
+                            cout << "ID: " << proceso.id_programa << ". Tiempo Estimado: " << proceso.tiempo_max << endl;
                         }
                 cout << "\nProceso en ejecucion: " <<
-                        "\nID Programa: " << proceso.id_programa + 1 << 
+                        "\nID Programa: " << proceso.id_programa << 
                         "\nProgramador: " << proceso.programador << 
                         "\nOperacion: " << proceso.datos[0] << proceso.operacion << proceso.datos[1] <<
                         "\nTiempo transcurrido: " << proceso.tiempo_transcurrido << 
                         "\nTiempo restante: " << proceso.tiempo_max - proceso.tiempo_transcurrido << 
                         "\nTiempo Global: " << reloj_global << endl;
                 this_thread::sleep_for(chrono::seconds(1));
+                //Valida si el proceso en ejecucion, ya cumplio su tiempo, para agregarlo a procesos_terminados...
+                if (proceso.tiempo_transcurrido >= proceso.tiempo_max) {
+                    proceso.ejecutar();
+                    procesos_terminados.push_back({proceso.id_programa, proceso.resultado});
+                }
+                //Muestra la tabla de procesos terminados...
                 if (!procesos_terminados.empty()) {
                     cout << "\nProcesos Terminados." << endl;
                     for (const auto& p : procesos_terminados) {
-                        cout << "ID Programa: " << p.first + 1 << " Resultado: " << p.second << endl;
+                        cout << "ID Programa: " << p.first << ", Resultado: " << p.second << endl;
                     }
                 }
             }
-            proceso.ejecutar();
-            procesos_terminados.push_back({proceso.id_programa, proceso.resultado});
+            //proceso.ejecutar();
+            //procesos_terminados.push_back({proceso.id_programa, proceso.resultado});
             /*cout << "\nProceso terminado: " << 
                     "\nID Programa: " << proceso.id_programa + 1 <<
 

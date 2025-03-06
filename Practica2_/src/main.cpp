@@ -2,7 +2,8 @@
 
 int main() {
     Simulador simulador;
-    simulador.agregar_proceso_manual();
+    //simulador.agregar_proceso_manual();
+    simulador.automatic();
     simulador.ejecutar();
     return 0;
 }

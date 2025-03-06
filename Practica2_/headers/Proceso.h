@@ -17,6 +17,8 @@ struct Proceso {
     double resultado;
 
     Proceso(int id, string prog, char op, vector<int> dat, int tiempo);
+    Proceso(int id, char op, int tiempo);
+    Proceso(int id, char op, vector<int> dat, int tiempo);
     void ejecutar();
 };
 

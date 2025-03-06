@@ -5,6 +5,7 @@
 #include <queue>
 #include <vector>
 #include <thread>
+#include <conio.h>
 #include <chrono>
 
 struct Lote {
@@ -19,6 +20,7 @@ private:
 
 public:
     void agregar_proceso_manual();
+    void automatic();
     void ejecutar();
 };
 

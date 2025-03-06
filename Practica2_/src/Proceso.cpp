@@ -3,6 +3,12 @@
 Proceso::Proceso(int id, string prog, char op, vector<int> dat, int tiempo)
     : id_programa(id), programador(prog), operacion(op), datos(dat), tiempo_max(tiempo), resultado(0) {}
 
+Proceso::Proceso(int id, char op, int tiempo)
+    :id_programa(id), operacion(op), tiempo_max(tiempo) {}
+
+Proceso::Proceso(int id, char op, vector<int> dat, int tiempo)
+    :id_programa(id), operacion(op), datos(dat), tiempo_max(tiempo), resultado(0) {}
+
 void Proceso::ejecutar() {
     switch (operacion) {
         case '+': resultado = datos[0] + datos[1]; break;
