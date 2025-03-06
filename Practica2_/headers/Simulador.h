@@ -5,8 +5,16 @@
 #include <queue>
 #include <vector>
 #include <thread>
-#include <conio.h>
-#include <chrono>
+
+#ifdef _WIN32
+    #include <conio.h>
+    #include <chrono>
+#elif __linux__
+    #include <termios.h> 
+    #include <unistd.h>  
+    #include <fcntl.h>
+#endif
+
 
 struct Lote {
     vector<Proceso> procesos;

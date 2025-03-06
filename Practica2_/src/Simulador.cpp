@@ -1,6 +1,38 @@
 #include "../headers/Simulador.h"
 #include <iostream>
 
+char getKey() {
+    #ifdef _WIN32
+        return _getch();
+    #elif __linux__
+        struct termios oldt, newt;
+        char ch;
+        int oldf;
+    
+        tcgetattr(STDIN_FILENO, &oldt);
+        newt = oldt;
+        newt.c_lflag &= ~(ICANON | ECHO);
+        tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+        oldf = fcntl(STDIN_FILENO, F_GETFL, 0);
+        fcntl(STDIN_FILENO, F_SETFL, oldf | O_NONBLOCK);
+    
+        ch = getchar();
+    
+        tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+        fcntl(STDIN_FILENO, F_SETFL, oldf);
+    
+        return ch;
+    #endif
+}
+
+void mySleep(int seconds) {
+    #ifdef _WIN32
+        this_thread::sleep_for(chrono::seconds(1));
+    #elif __linux__
+        sleep(seconds);
+    #endif
+    }
+
 void Simulador::agregar_proceso_manual() {
     vector<Proceso> procesos;
     int n;
@@ -86,6 +118,7 @@ void Simulador::automatic() {
     }
 }
 
+
 void Simulador::ejecutar() {
     bool pause = false;
     while (!lotes.empty()) {
@@ -100,8 +133,7 @@ void Simulador::ejecutar() {
             cout << "\nEjecutando proceso " << proceso.id_programa << ": " << proceso.operacion << endl;
 
             for (int t = 0; t < proceso.tiempo_max; ++t) {
-                if (_kbhit()) {
-                    char tecla = _getch();
+                    char tecla = getKey();
                     switch (tecla) {
                         case 'I': case 'i':
                             cout << "\nProceso " << proceso.id_programa << " interrumpido y enviado de nuevo al lote actual." << endl;
@@ -117,17 +149,15 @@ void Simulador::ejecutar() {
                             cout << "Simulacion pausada. Presione 'C' para continuar..." << endl;
                             pause = true;
                             while (pause) {
-                                if (_kbhit()) {
-                                    char key = _getch();
+                                    char key = getKey();
                                     if (key == 'C' || key == 'c') {
                                         pause = false;
                                         cout << "Simulacion reanudada." << endl;
                                     }
-                                }
+                                
                             }
                             break;
                     }
-                }
 
                 proceso.tiempo_transcurrido++;
                 reloj_global++;
@@ -143,7 +173,7 @@ void Simulador::ejecutar() {
                         "\nTiempo transcurrido: " << proceso.tiempo_transcurrido <<
                         "\nTiempo restante: " << proceso.tiempo_max - proceso.tiempo_transcurrido <<
                         "\nTiempo Global: " << reloj_global << endl;
-                this_thread::sleep_for(chrono::seconds(1));
+                mySleep(1);
                 // Valida si el proceso en ejecucion, ya cumplio su tiempo, para agregarlo a procesos_terminados...
                 if (proceso.tiempo_transcurrido >= proceso.tiempo_max) {
                     proceso.ejecutar();
