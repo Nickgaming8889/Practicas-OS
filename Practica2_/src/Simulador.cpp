@@ -31,7 +31,7 @@ void mySleep(int seconds) {
     #elif __linux__
         sleep(seconds);
     #endif
-    }
+}
 
 void Simulador::agregar_proceso_manual() {
     vector<Proceso> procesos;
@@ -80,10 +80,9 @@ void Simulador::automatic() {
         int tiempo_max = rand() % 11 + 7;
         int opcion = rand() % 5 + 1;
         vector<int> data(2);
+        data[0] = rand() % 50;
+        data[1] = rand() % 50;
         char op;
-
-        cout << "Ingrese los operandos: ";
-        cin >> data[0] >> data[1];
 
         switch (opcion) {
             case 1:
@@ -192,7 +191,8 @@ void Simulador::ejecutar() {
                 }
             }
             //siguiente_proceso:;
-            ++it;
+            if (it != lote_actual.procesos.end())
+                ++it;
         }
         //siguiente_lote:;
         num_lote++;
