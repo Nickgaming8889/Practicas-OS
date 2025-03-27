@@ -6,9 +6,12 @@ import math
 from enum import Enum
 from collections import deque
 import platform
-import tty
-import termios
-import select
+import msvcrt  # Para Windows
+try:
+    import tty
+    import termios
+except ImportError:
+    pass  # Para sistemas que no son Unix
 
 class Estado(Enum):
     NUEVO = 1
@@ -54,18 +57,22 @@ class Proceso:
         return self.estado.name
 
 def clear_screen():
-    os.system('clear')
+    os.system('cls' if platform.system() == 'Windows' else 'clear')
 
 def get_key():
-    fd = sys.stdin.fileno()
-    old_settings = termios.tcgetattr(fd)
-    try:
-        tty.setraw(sys.stdin.fileno())
-        if select.select([sys.stdin], [], [], 0) == ([sys.stdin], [], []):
-            return sys.stdin.read(1)
+    if platform.system() == 'Windows':
+        if msvcrt.kbhit():
+            return msvcrt.getch().decode()
         return ''
-    finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    else:
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        try:
+            tty.setraw(sys.stdin.fileno())
+            ch = sys.stdin.read(1)
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        return ch
 
 class Simulador:
     def __init__(self):
@@ -146,7 +153,7 @@ class Simulador:
             print("\nSimulación pausada. Presione 'C' para continuar...")
             while True:
                 key = get_key()
-                if key and key.upper() == 'C':
+                if key.upper() == 'C':
                     break
                 time.sleep(0.1)
         elif tecla == 'B':  # Mostrar tabla de procesos
@@ -179,10 +186,7 @@ class Simulador:
         
         print("-" * 80)
         print("Presione 'C' para continuar...")
-        while True:
-            key = get_key()
-            if key and key.upper() == 'C':
-                break
+        while get_key().upper() != 'C':
             time.sleep(0.1)
     
     def mostrar_bcp(self, p):
@@ -194,7 +198,7 @@ class Simulador:
             if math.isnan(p.resultado):
                 print("ERROR", end="")
             else:
-                print(f"{p.resultado:.2f}", end="")
+                print(p.resultado, end="")
         print()
         
         print(f"T. Llegada: {p.tiempo_llegada}", end="")
@@ -254,7 +258,7 @@ class Simulador:
             if math.isnan(p.resultado):
                 print("ERROR")
             else:
-                print(f"{p.resultado:.2f}")
+                print(p.resultado)
     
     def ejecutar(self):
         try:
@@ -286,7 +290,7 @@ class Simulador:
                         if math.isnan(self.ejecutando.resultado):
                             print("ERROR")
                         else:
-                            print(f"{self.ejecutando.resultado:.2f}")
+                            print(self.ejecutando.resultado)
                         time.sleep(2)
                         
                         # Mover a terminados
