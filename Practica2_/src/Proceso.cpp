@@ -1,10 +1,10 @@
 #include "../headers/Proceso.h"
 
-Proceso::Proceso(int id, string prog, char op, vector<int> dat, int tiempo)
+/*Proceso::Proceso(int id, string prog, char op, vector<int> dat, int tiempo)
     : id_programa(id), programador(prog), operacion(op), datos(dat), tiempo_max(tiempo), resultado(0) {}
 
 Proceso::Proceso(int id, char op, int tiempo)
-    :id_programa(id), operacion(op), tiempo_max(tiempo) {}
+    :id_programa(id), operacion(op), tiempo_max(tiempo) {}*/
 
 Proceso::Proceso(int id, char op, vector<int> dat, int tiempo)
     :id_programa(id), operacion(op), datos(dat), tiempo_max(tiempo), resultado(0) {}
