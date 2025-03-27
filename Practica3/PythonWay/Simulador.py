@@ -5,10 +5,9 @@ import random
 import math
 from enum import Enum
 from collections import deque
-import platform
 import tty
 import termios
-import select
+import fcntl
 
 class Estado(Enum):
     NUEVO = 1
@@ -53,20 +52,6 @@ class Proceso:
     def get_estado_string(self):
         return self.estado.name
 
-def clear_screen():
-    os.system('clear')
-
-def get_key():
-    fd = sys.stdin.fileno()
-    old_settings = termios.tcgetattr(fd)
-    try:
-        tty.setraw(sys.stdin.fileno())
-        if select.select([sys.stdin], [], [], 0) == ([sys.stdin], [], []):
-            return sys.stdin.read(1)
-        return ''
-    finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-
 class Simulador:
     def __init__(self):
         self.nuevos = deque()
@@ -77,35 +62,107 @@ class Simulador:
         self.reloj_global = 0
         self.id_counter = 1
         self.MAX_PROCESOS_EN_MEMORIA = 3
+        self.terminal_configurado = False
+    
+    def configurar_terminal(self):
+        """Configura el terminal para lectura de teclas sin bloqueo"""
+        if not self.terminal_configurado:
+            self.fd = sys.stdin.fileno()
+            self.old_settings = termios.tcgetattr(self.fd)
+            tty.setraw(self.fd)
+            self.old_flags = fcntl.fcntl(self.fd, fcntl.F_GETFL)
+            fcntl.fcntl(self.fd, fcntl.F_SETFL, self.old_flags | os.O_NONBLOCK)
+            self.terminal_configurado = True
+    
+    def restaurar_terminal(self):
+        """Restaura la configuración original del terminal"""
+        if self.terminal_configurado:
+            termios.tcsetattr(self.fd, termios.TCSADRAIN, self.old_settings)
+            fcntl.fcntl(self.fd, fcntl.F_SETFL, self.old_flags)
+            self.terminal_configurado = False
+    
+    def get_key(self):
+        """Lee una tecla sin bloquear la ejecución"""
+        try:
+            return sys.stdin.read(1)
+        except:
+            return ''
+    
+    def clear_screen(self):
+        """Limpia la pantalla del terminal"""
+        os.system('clear')
     
     def agregar_proceso_automatico(self):
+        """Crea un nuevo proceso con valores aleatorios"""
         tiempo_max = random.randint(7, 18)
         opcion = random.randint(0, 5)
-        data = [random.randint(0, 20), random.randint(4, 20)]
+        data = [random.randint(0, 20), random.randint(1, 20)]  # Evitar división por cero
         op = ['+', '-', '*', '/', '%', '^'][opcion]
         self.nuevos.append(Proceso(self.id_counter, op, data, tiempo_max, self.reloj_global))
         self.id_counter += 1
     
     def agregar_proceso_manual(self):
+        """Permite al usuario crear un proceso manualmente"""
         print("\nAgregar nuevo proceso:")
-        operacion = input("Operación (+, -, *, /, %, ^): ")
-        dato1 = int(input("Primer operando: "))
-        dato2 = int(input("Segundo operando: "))
-        tiempo_max = int(input("Tiempo máximo estimado (7-18): "))
+        while True:
+            operacion = input("Operación (+, -, *, /, %, ^): ").strip()
+            if operacion in ['+', '-', '*', '/', '%', '^']:
+                break
+            print("Operación no válida. Intente nuevamente.")
+        
+        while True:
+            try:
+                dato1 = int(input("Primer operando: "))
+                dato2 = int(input("Segundo operando: "))
+                if operacion == '/' and dato2 == 0:
+                    print("No se puede dividir por cero. Intente nuevamente.")
+                    continue
+                break
+            except ValueError:
+                print("Entrada no válida. Intente nuevamente.")
+        
+        while True:
+            try:
+                tiempo_max = int(input("Tiempo máximo estimado (7-18): "))
+                if 7 <= tiempo_max <= 18:
+                    break
+                print("El tiempo debe estar entre 7 y 18.")
+            except ValueError:
+                print("Entrada no válida. Intente nuevamente.")
+        
         self.nuevos.append(Proceso(self.id_counter, operacion, [dato1, dato2], tiempo_max, self.reloj_global))
         self.id_counter += 1
     
-    def automatic(self):
-        n = int(input("Ingrese el número de procesos: "))
+    def modo_automatico(self):
+        """Genera procesos automáticamente"""
+        while True:
+            try:
+                n = int(input("Ingrese el número de procesos: "))
+                if n > 0:
+                    break
+                print("Debe ingresar un número positivo.")
+            except ValueError:
+                print("Entrada no válida. Intente nuevamente.")
+        
         for _ in range(n):
             self.agregar_proceso_automatico()
     
-    def manual(self):
-        n = int(input("Ingrese el número de procesos: "))
+    def modo_manual(self):
+        """Permite al usuario ingresar procesos manualmente"""
+        while True:
+            try:
+                n = int(input("Ingrese el número de procesos: "))
+                if n > 0:
+                    break
+                print("Debe ingresar un número positivo.")
+            except ValueError:
+                print("Entrada no válida. Intente nuevamente.")
+        
         for _ in range(n):
             self.agregar_proceso_manual()
     
     def actualizar_estados(self):
+        """Actualiza los estados de los procesos"""
         # Mover procesos de nuevos a listos si hay espacio
         while self.nuevos and len(self.listos) + (1 if self.ejecutando else 0) + len(self.bloqueados) < self.MAX_PROCESOS_EN_MEMORIA:
             p = self.nuevos.popleft()
@@ -120,106 +177,90 @@ class Simulador:
                 self.listos.append(p)
                 self.bloqueados.remove(p)
         
-        # Asignar nuevo proceso a ejecución si hay listos y no hay proceso ejecutando
+        # Asignar nuevo proceso a ejecución
         if not self.ejecutando and self.listos:
             self.ejecutando = self.listos.popleft()
             self.ejecutando.estado = Estado.EJECUCION
             if self.ejecutando.tiempo_respuesta == -1:
                 self.ejecutando.tiempo_respuesta = self.reloj_global - self.ejecutando.tiempo_llegada
     
-    def procesar_teclas(self, tecla):
+    def procesar_tecla(self, tecla):
+        """Procesa la tecla presionada por el usuario"""
         tecla = tecla.upper()
         if tecla == 'I' and self.ejecutando:  # Interrupción E/S
             self.ejecutando.estado = Estado.BLOQUEADO
             self.ejecutando.tiempo_bloqueado = 0
             self.bloqueados.append(self.ejecutando)
             self.ejecutando = None
+            return True
         elif tecla == 'E' and self.ejecutando:  # Error
             self.ejecutando.estado = Estado.TERMINADO
             self.ejecutando.resultado = float('nan')
             self.ejecutando.tiempo_finalizacion = self.reloj_global
             self.terminados.append(self.ejecutando)
             self.ejecutando = None
+            return True
         elif tecla == 'N':  # Nuevo proceso
             self.agregar_proceso_automatico()
+            return True
         elif tecla == 'P':  # Pausa
-            print("\nSimulación pausada. Presione 'C' para continuar...")
+            self.mostrar_mensaje("\nSimulación pausada. Presione 'C' para continuar...")
             while True:
-                key = get_key()
+                key = self.get_key()
                 if key and key.upper() == 'C':
                     break
                 time.sleep(0.1)
+            return True
         elif tecla == 'B':  # Mostrar tabla de procesos
             self.mostrar_tabla_procesos()
+            return True
+        return False
+    
+    def mostrar_mensaje(self, mensaje):
+        """Muestra un mensaje en la interfaz"""
+        self.clear_screen()
+        print(mensaje)
     
     def mostrar_tabla_procesos(self):
-        clear_screen()
+        """Muestra la tabla completa de procesos"""
+        self.clear_screen()
         print("\n=== TABLA DE PROCESOS (BCP) ===")
-        print("-" * 80)
+        print("-" * 90)
+        print("| ID | Estado     | Operación | T.Llegada | T.Finaliz | T.Retorno | T.Espera | T.Servicio | Resultado |")
+        print("-" * 90)
         
-        # Procesos nuevos
-        for p in list(self.nuevos):
-            self.mostrar_bcp(p)
+        # Función auxiliar para mostrar un proceso
+        def linea_proceso(p):
+            operacion = f"{p.datos[0]} {p.operacion} {p.datos[1]}"
+            estado = p.get_estado_string()
+            resultado = "ERROR" if math.isnan(p.resultado) else f"{p.resultado:.2f}" if p.estado == Estado.TERMINADO else "N/A"
+            finalizacion = p.tiempo_finalizacion if p.estado == Estado.TERMINADO else "N/A"
+            retorno = p.tiempo_finalizacion - p.tiempo_llegada if p.estado == Estado.TERMINADO else "N/A"
+            
+            return f"| {p.id_programa:2} | {estado:10} | {operacion:9} | {p.tiempo_llegada:9} | {finalizacion:9} | {retorno:9} | {p.tiempo_espera:7} | {p.tiempo_servicio:8} | {resultado:9} |"
         
-        # Procesos listos
-        for p in self.listos:
-            self.mostrar_bcp(p)
-        
-        # Proceso en ejecución
+        # Mostrar todos los procesos
+        for p in sorted(self.nuevos, key=lambda x: x.id_programa):
+            print(linea_proceso(p))
+        for p in sorted(self.listos, key=lambda x: x.id_programa):
+            print(linea_proceso(p))
         if self.ejecutando:
-            self.mostrar_bcp(self.ejecutando)
+            print(linea_proceso(self.ejecutando))
+        for p in sorted(self.bloqueados, key=lambda x: x.id_programa):
+            print(linea_proceso(p))
+        for p in sorted(self.terminados, key=lambda x: x.id_programa):
+            print(linea_proceso(p))
         
-        # Procesos bloqueados
-        for p in self.bloqueados:
-            self.mostrar_bcp(p)
-        
-        # Procesos terminados
-        for p in self.terminados:
-            self.mostrar_bcp(p)
-        
-        print("-" * 80)
-        print("Presione 'C' para continuar...")
-        while True:
-            key = get_key()
-            if key and key.upper() == 'C':
-                break
-            time.sleep(0.1)
-    
-    def mostrar_bcp(self, p):
-        print(f"ID: {p.id_programa} | Estado: {p.get_estado_string()}")
-        print(f"Operación: {p.datos[0]} {p.operacion} {p.datos[1]}", end="")
-        
-        if p.estado == Estado.TERMINADO:
-            print(" | Resultado: ", end="")
-            if math.isnan(p.resultado):
-                print("ERROR", end="")
-            else:
-                print(f"{p.resultado:.2f}", end="")
-        print()
-        
-        print(f"T. Llegada: {p.tiempo_llegada}", end="")
-        if p.estado == Estado.TERMINADO:
-            print(f" | T. Finalización: {p.tiempo_finalizacion} | T. Retorno: {p.tiempo_finalizacion - p.tiempo_llegada}", end="")
-        print()
-        
-        print(f"T. Espera: {p.tiempo_espera} | T. Servicio: {p.tiempo_servicio}", end="")
-        
-        if p.estado != Estado.TERMINADO:
-            print(f" | T. Restante: {p.tiempo_max - p.tiempo_transcurrido}", end="")
-        
-        if p.tiempo_respuesta != -1:
-            print(f" | T. Respuesta: {p.tiempo_respuesta}", end="")
-        
-        if p.estado == Estado.BLOQUEADO:
-            print(f" | T. Bloqueado restante: {8 - p.tiempo_bloqueado}", end="")
-        
-        print("\n" + "-" * 80)
+        print("-" * 90)
+        print("\nPresione cualquier tecla para continuar...")
+        self.get_key()
     
     def mostrar_interfaz(self):
-        clear_screen()
+        """Muestra la interfaz principal del simulador"""
+        self.clear_screen()
         print("=== SIMULADOR DE PROCESOS ===")
         print(f"Reloj Global: {self.reloj_global} u.t.")
-        print("Teclas: I (Interrupción), E (Error), P (Pausa), C (Continuar), N (Nuevo), B (Tabla)\n")
+        print("Teclas: I (Interrupción), E (Error), P (Pausa), N (Nuevo), B (Tabla)\n")
         
         # Procesos nuevos
         print(f"Procesos nuevos pendientes: {len(self.nuevos)}")
@@ -251,51 +292,48 @@ class Simulador:
         print("\n--- Procesos Terminados ---")
         for p in self.terminados:
             print(f"ID: {p.id_programa} | Operación: {p.datos[0]} {p.operacion} {p.datos[1]} | Resultado: ", end="")
-            if math.isnan(p.resultado):
-                print("ERROR")
-            else:
-                print(f"{p.resultado:.2f}")
+            print("ERROR" if math.isnan(p.resultado) else f"{p.resultado:.2f}")
     
     def ejecutar(self):
+        """Ejecuta el ciclo principal del simulador"""
         try:
+            self.configurar_terminal()
+            
             while self.nuevos or self.listos or self.ejecutando or self.bloqueados:
                 self.actualizar_estados()
                 self.mostrar_interfaz()
                 
-                # Procesar teclas
-                key = get_key()
-                if key:
-                    self.procesar_teclas(key)
+                # Procesar teclas con timeout
+                start_time = time.time()
+                key_pressed = False
+                
+                while time.time() - start_time < 1.0:  # Esperar hasta 1 segundo
+                    key = self.get_key()
+                    if key:
+                        if self.procesar_tecla(key):
+                            key_pressed = True
+                            break
+                    time.sleep(0.05)
+                
+                if key_pressed:
                     continue
                 
                 # Avanzar tiempo de ejecución
                 if self.ejecutando:
-                    time.sleep(1)  # 1 segundo real por unidad de tiempo
-                    
                     self.ejecutando.tiempo_transcurrido += 1
                     self.ejecutando.tiempo_servicio += 1
                     self.reloj_global += 1
                     
-                    # Verificar si el proceso ha terminado
                     if self.ejecutando.tiempo_transcurrido >= self.ejecutando.tiempo_max:
                         self.ejecutando.ejecutar()
+                        self.mostrar_mensaje(f"\nProceso {self.ejecutando.id_programa} terminado. Resultado: {'ERROR' if math.isnan(self.ejecutando.resultado) else f'{self.ejecutando.resultado:.2f}'}")
                         
-                        # Mostrar resultado
-                        clear_screen()
-                        print(f"\nProceso {self.ejecutando.id_programa} terminado. Resultado: ", end="")
-                        if math.isnan(self.ejecutando.resultado):
-                            print("ERROR")
-                        else:
-                            print(f"{self.ejecutando.resultado:.2f}")
-                        time.sleep(2)
-                        
-                        # Mover a terminados
                         self.ejecutando.estado = Estado.TERMINADO
                         self.ejecutando.tiempo_finalizacion = self.reloj_global
                         self.terminados.append(self.ejecutando)
                         self.ejecutando = None
+                        time.sleep(1)
                 else:
-                    time.sleep(1)
                     self.reloj_global += 1
                 
                 # Actualizar tiempos de espera
@@ -303,44 +341,29 @@ class Simulador:
                     p.tiempo_espera += 1
             
             # Mostrar resultados finales
-            clear_screen()
-            print("\n=== SIMULACIÓN TERMINADA ===")
+            self.mostrar_mensaje("\n=== SIMULACIÓN TERMINADA ===")
             print(f"Tiempo total: {self.reloj_global} unidades de tiempo\n")
             
-            # Mostrar tabla completa de procesos
-            print("=== RESUMEN FINAL DE PROCESOS ===")
-            print("-" * 80)
-            print("| ID | Operación   | Estado     | T.Llegada | T.Finaliz | T.Retorno | T.Espera | T.Servicio | Resultado |")
-            print("-" * 80)
-            
-            for p in sorted(self.terminados, key=lambda x: x.id_programa):
-                operacion = f"{p.datos[0]} {p.operacion} {p.datos[1]}"
-                resultado = "ERROR" if math.isnan(p.resultado) else f"{p.resultado:.2f}"
-                
-                print(f"| {p.id_programa:2} | {operacion:10} | {p.get_estado_string():10} | "
-                      f"{p.tiempo_llegada:9} | {p.tiempo_finalizacion:9} | "
-                      f"{p.tiempo_finalizacion - p.tiempo_llegada:9} | "
-                      f"{p.tiempo_espera:8} | {p.tiempo_servicio:9} | "
-                      f"{resultado:9} |")
-            
-            print("-" * 80)
-            
-            # Calcular estadísticas
+            # Mostrar estadísticas
             if self.terminados:
-                avg_retorno = sum(p.tiempo_finalizacion - p.tiempo_llegada for p in self.terminados) / len(self.terminados)
-                avg_espera = sum(p.tiempo_espera for p in self.terminados) / len(self.terminados)
-                avg_servicio = sum(p.tiempo_servicio for p in self.terminados) / len(self.terminados)
+                total_procesos = len(self.terminados)
+                avg_retorno = sum(p.tiempo_finalizacion - p.tiempo_llegada for p in self.terminados) / total_procesos
+                avg_espera = sum(p.tiempo_espera for p in self.terminados) / total_procesos
+                avg_servicio = sum(p.tiempo_servicio for p in self.terminados) / total_procesos
                 
-                print("\n=== ESTADÍSTICAS ===")
+                print("=== ESTADÍSTICAS FINALES ===")
+                print(f"Procesos completados: {total_procesos}")
                 print(f"Tiempo promedio de retorno: {avg_retorno:.2f}")
                 print(f"Tiempo promedio de espera: {avg_espera:.2f}")
                 print(f"Tiempo promedio de servicio: {avg_servicio:.2f}")
             
             print("\nPresione cualquier tecla para salir...")
-            get_key()
+            self.get_key()
         
         except KeyboardInterrupt:
             print("\nSimulación interrumpida por el usuario")
+        finally:
+            self.restaurar_terminal()
 
 def main():
     sim = Simulador()
@@ -348,12 +371,17 @@ def main():
     print("=== SIMULADOR DE PROCESOS ===")
     print("1. Modo automático")
     print("2. Modo manual")
-    opcion = input("Seleccione el modo (1/2): ")
     
-    if opcion == '1':
-        sim.automatic()
-    else:
-        sim.manual()
+    while True:
+        opcion = input("Seleccione el modo (1/2): ").strip()
+        if opcion == '1':
+            sim.modo_automatico()
+            break
+        elif opcion == '2':
+            sim.modo_manual()
+            break
+        else:
+            print("Opción no válida. Intente nuevamente.")
     
     sim.ejecutar()
 
